@@ -20,7 +20,7 @@ from collections import deque
             print("This is not a valid number.")
 """
 #calculates the next anxiety check time by taking the anxity list and accounting for high levels, high changes, and slow scroll speed.
-def calculate_next_anxiety_check(anxietyList: LRU_cache, averageScrollSpeed):
+def calculate_next_anxiety_check(anxietyList, averageScrollSpeed):
     """ average scroll speed is compared to average"""
     if len(anxietyList) < 4:
         return 500 # default to 5 minutes if we don't have enough data
