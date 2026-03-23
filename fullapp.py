@@ -16,7 +16,6 @@ speed_history = deque(maxlen=10)
 checkin_history = deque(maxlen=50)
 
 # Anxiety-specific state
-anxiety_list = []
 check_in_intervals = []
 
 
@@ -104,11 +103,11 @@ def stream_sample():
 
     # --- Anxiety warnings (only meaningful once we have check-in data) ---
     slow_scroll = stats.warn_slow_scroll_speed(average_scroll_speed)
-    high_anxiety = stats.warn_high_anxiety(anxiety_list)
-    high_change = stats.warn_high_change(anxiety_list)
+    high_anxiety = stats.warn_high_anxiety(stats.anxiety_list)
+    high_change = stats.warn_high_change(stats.anxiety_list)
 
     # How long until the next check-in is suggested (minutes)
-    next_check_in = stats.calculate_next_anxiety_check(anxiety_list, average_scroll_speed)
+    next_check_in = stats.calculate_next_anxiety_check(stats.anxiety_list, average_scroll_speed)
 
     return jsonify({
         "flatline_alert": flatline,
@@ -143,7 +142,7 @@ def submit_checkin():
 
     # Record how many minutes elapsed since the last check-in
     interval = float(data.get("interval_minutes", 5))
-    anxiety_list.append(score)
+    stats.anxiety_list.append(score)
     check_in_intervals.append(interval)
     checkin_history.append(data)
 
@@ -155,15 +154,15 @@ def submit_checkin():
     # Build response with warning flags
     response = {
         "status": "ok",
-        "high_anxiety_alert": stats.warn_high_anxiety(anxiety_list),
-        "high_change_alert": stats.warn_high_change(anxiety_list),
+        "high_anxiety_alert": stats.warn_high_anxiety(stats.anxiety_list),
+        "high_change_alert": stats.warn_high_change(stats.anxiety_list),
         "slow_scroll_alert": stats.warn_slow_scroll_speed(average_scroll_speed),
-        "next_checkin_minutes": stats.calculate_next_anxiety_check(anxiety_list, average_scroll_speed),
+        "next_checkin_minutes": stats.calculate_next_anxiety_check(stats.anxiety_list, average_scroll_speed),
     }
 
     # Attach a chart once we have enough data points
-    if len(anxiety_list) >= 2:
-        response["chart_png_base64"] = stats.build_anxiety_plot(anxiety_list, check_in_intervals)
+    if len(stats.anxiety_list) >= 2:
+        response["chart_png_base64"] = stats.build_anxiety_plot(stats.anxiety_list, check_in_intervals)
 
     return jsonify(response)
 
@@ -171,7 +170,7 @@ def submit_checkin():
 @app.route("/anxiety_chart", methods=["GET"])
 def anxiety_chart():
     """Standalone endpoint that returns the latest anxiety chart as a PNG image."""
-    if len(anxiety_list) < 2:
+    if len(stats.anxiety_list) < 2:
         return jsonify({"error": "Not enough data to plot yet."}), 400
 
     png_b64 = stats.build_anxiety_plot(anxiety_list, check_in_intervals)
