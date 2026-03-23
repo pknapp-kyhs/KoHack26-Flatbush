@@ -2,12 +2,11 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import urllib.parse
 import numpy as np
-import math
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server use
 import matplotlib.pyplot as plt
-import io
 import base64
+import stats
 from collections import deque
 
 app = Flask(__name__)
@@ -19,64 +18,6 @@ checkin_history = deque(maxlen=50)
 # Anxiety-specific state
 anxiety_list = []
 check_in_intervals = []
-
-
-# ---------------------------------------------------------------------------
-# Anxiety Logic (ported from standalone module)
-# ---------------------------------------------------------------------------
-
-def calculate_next_anxiety_check(anxiety_list: list, average_scroll_speed: float) -> float:
-    """
-    Returns minutes until the next anxiety check-in.
-    Falls back to 5 minutes when there is insufficient history.
-    average_scroll_speed is compared against 1 (normal speed).
-    """
-    if len(anxiety_list) < 4:
-        return 5.0
-
-    arr = np.array(anxiety_list)
-    avg = np.mean(arr)
-    std = np.std(arr)
-    return float(avg + std - math.fabs(1 - average_scroll_speed))
-
-
-def warn_high_anxiety(anxiety_list: list) -> bool:
-    """True when the latest score is 8 or above."""
-    if not anxiety_list:
-        return False
-    return anxiety_list[-1] >= 8
-
-
-def warn_high_change(anxiety_list: list, time_between: float = 1, threshold: float = 3) -> bool:
-    """True when the rate of change between the last two readings exceeds the threshold."""
-    if len(anxiety_list) < 2:
-        return False
-    return math.fabs(anxiety_list[-1] - anxiety_list[-2]) / time_between >= threshold
-
-
-def warn_slow_scroll_speed(average_scroll_speed: float, threshold: float = 0.5) -> bool:
-    """True when average scroll speed is at or below the threshold."""
-    return average_scroll_speed <= threshold
-
-
-def build_anxiety_plot(anxiety_list: list, check_in_intervals: list) -> str:
-    """
-    Renders the anxiety-over-time chart and returns it as a base64 PNG
-    so it can be embedded directly in a JSON response.
-    """
-    fig, ax = plt.subplots(figsize=(6, 3))
-    ax.plot(np.cumsum(check_in_intervals), anxiety_list, marker='o', linewidth=2)
-    ax.set_xlabel('Time (minutes)')
-    ax.set_ylabel('Anxiety Level')
-    ax.set_title('Anxiety Levels Over Time')
-    ax.set_ylim(0, 11)
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png')
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode('utf-8')
 
 
 # ---------------------------------------------------------------------------
@@ -162,12 +103,12 @@ def stream_sample():
     average_scroll_speed = float(np.mean(list(speed_history))) if speed_history else 0.0
 
     # --- Anxiety warnings (only meaningful once we have check-in data) ---
-    slow_scroll = warn_slow_scroll_speed(average_scroll_speed)
-    high_anxiety = warn_high_anxiety(anxiety_list)
-    high_change = warn_high_change(anxiety_list)
+    slow_scroll = stats.warn_slow_scroll_speed(average_scroll_speed)
+    high_anxiety = stats.warn_high_anxiety(anxiety_list)
+    high_change = stats.warn_high_change(anxiety_list)
 
     # How long until the next check-in is suggested (minutes)
-    next_check_in = calculate_next_anxiety_check(anxiety_list, average_scroll_speed)
+    next_check_in = stats.calculate_next_anxiety_check(anxiety_list, average_scroll_speed)
 
     return jsonify({
         "flatline_alert": flatline,
@@ -214,15 +155,15 @@ def submit_checkin():
     # Build response with warning flags
     response = {
         "status": "ok",
-        "high_anxiety_alert": warn_high_anxiety(anxiety_list),
-        "high_change_alert": warn_high_change(anxiety_list),
-        "slow_scroll_alert": warn_slow_scroll_speed(average_scroll_speed),
-        "next_checkin_minutes": calculate_next_anxiety_check(anxiety_list, average_scroll_speed),
+        "high_anxiety_alert": stats.warn_high_anxiety(anxiety_list),
+        "high_change_alert": stats.warn_high_change(anxiety_list),
+        "slow_scroll_alert": stats.warn_slow_scroll_speed(average_scroll_speed),
+        "next_checkin_minutes": stats.calculate_next_anxiety_check(anxiety_list, average_scroll_speed),
     }
 
     # Attach a chart once we have enough data points
     if len(anxiety_list) >= 2:
-        response["chart_png_base64"] = build_anxiety_plot(anxiety_list, check_in_intervals)
+        response["chart_png_base64"] = stats.build_anxiety_plot(anxiety_list, check_in_intervals)
 
     return jsonify(response)
 
@@ -233,7 +174,7 @@ def anxiety_chart():
     if len(anxiety_list) < 2:
         return jsonify({"error": "Not enough data to plot yet."}), 400
 
-    png_b64 = build_anxiety_plot(anxiety_list, check_in_intervals)
+    png_b64 = stats.build_anxiety_plot(anxiety_list, check_in_intervals)
     img_bytes = base64.b64decode(png_b64)
     from flask import Response
     return Response(img_bytes, mimetype='image/png')
