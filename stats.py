@@ -1,7 +1,11 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from collections import deque   
+from io import BytesIO
+import base64
+
+
+anxiety_list = []
 
 #checks in with the user once and continues to ask until they give a valid number.
 #appends the valid number to the existing anxietyList and returns it.
@@ -42,7 +46,27 @@ def warn_high_change(anxietyList, timeBetween = 2, threshold = 1.5):
     return math.fabs(anxietyList[-1] - anxietyList[-2])/timeBetween >= threshold
 
 def warn_slow_scroll_speed(averageScrollSpeed, thresholdSeconds = 20 ):
-    return averageScrollSpeed <= thresholdSeconds
+    # The frontend sends an activity ratio from 0 to 1, not seconds.
+    return averageScrollSpeed < 0.2
+
+
+def build_anxiety_plot(anxietyList, checkInIntervals):
+    """Return a compact PNG chart encoded for JSON responses."""
+    intervals = list(checkInIntervals)
+    if len(intervals) != len(anxietyList):
+        intervals = [5] * len(anxietyList)
+    x_values = np.cumsum(intervals)
+    figure, axis = plt.subplots(figsize=(6, 3.2))
+    axis.plot(x_values, anxietyList, marker="o", color="#8DA399")
+    axis.set_xlabel("Minutes")
+    axis.set_ylabel("Anxiety level")
+    axis.set_ylim(1, 10)
+    axis.grid(alpha=0.2)
+    figure.tight_layout()
+    output = BytesIO()
+    figure.savefig(output, format="png", dpi=120)
+    plt.close(figure)
+    return base64.b64encode(output.getvalue()).decode("ascii")
     
 def plot_anxiety_over_time(anxietyList, checkInIntervals):
     plt.plot(np.cumsum(checkInIntervals),anxietyList)

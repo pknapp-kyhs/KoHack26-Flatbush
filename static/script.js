@@ -222,7 +222,7 @@ async function submitCheckIn() {
     fetch('/submit_checkin', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ anxiety, focus })
+        body: JSON.stringify({ anxiety_score: anxiety, focus, interval_minutes: 5 })
     });
 
     let advice = "";
