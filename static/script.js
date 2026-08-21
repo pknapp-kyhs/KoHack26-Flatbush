@@ -250,14 +250,32 @@ async function submitCheckIn() {
 async function init() {
     setupNudgeUI();
     isPrayerOpen = false;
-    const res = await fetch(`https://www.sefaria.org/api/v2/index/${document.getElementById('nusach').value}`);
-    const data = await res.json();
+    const nusach = document.getElementById('nusach').value;
+    let data;
+
+    // Prefer the local catalog.  During development, an empty catalog can
+    // occur before the one-time import has run, so retain the direct Sefaria
+    // index as a bootstrap fallback.
+    try {
+        const localRes = await fetch(`/siddur_index/${nusach}`);
+        if (localRes.ok) {
+            data = await localRes.json();
+        }
+    } catch (error) {
+        console.warn('Local siddur catalog unavailable:', error);
+    }
+
+    if (!data || !data.schema) {
+        document.getElementById('display').textContent = 'Siddur catalog unavailable.';
+        return;
+    }
+
     document.getElementById('dynamic-menus').innerHTML = '';
     buildMenus(data.schema, []);
 }
 
 function buildMenus(node, currentChain) {
-    if (!node.nodes) return;
+    if (!node || !node.nodes) return;
     const s = document.createElement('select');
     s.options.add(new Option("-- Select --", ""));
     node.nodes.forEach((n, i) => s.options.add(new Option(n.heTitle || n.key, JSON.stringify({i, n}))));

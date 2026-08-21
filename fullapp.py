@@ -1,16 +1,17 @@
 from flask import Flask, render_template, request, jsonify
-import requests
-import urllib.parse
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for server use
+import matplotlib.pyplot as plt
 import base64
 import stats
+import siddur_store
 from collections import deque
 
 app = Flask(__name__)
 
 # speed_history stores 1 for active, 0 for idle (2-second intervals)
 speed_history = deque(maxlen=10)
-anxiety_dq = deque(maxlen=50)  # Store recent anxiety levels for plotting
 checkin_history = deque(maxlen=50)
 
 # Anxiety-specific state
@@ -21,31 +22,6 @@ check_in_intervals = []
 # Sefaria helpers
 # ---------------------------------------------------------------------------
 
-def flatten_text(data):
-    if isinstance(data, str):
-        return [data]
-    if isinstance(data, list):
-        result = []
-        for item in data:
-            result.extend(flatten_text(item))
-        return sorted(result)
-    return []
-
-
-def get_sefaria_text(ref: str):
-    encoded_ref = urllib.parse.quote(ref)
-    url = f"https://www.sefaria.org/api/v3/texts/{encoded_ref}?context=0"
-    try:
-        r = requests.get(url, timeout=5).json()
-        if "versions" in r:
-            for v in r['versions']:
-                if v.get('language') == 'he' and v.get('text'):
-                    return flatten_text(v['text'])
-    except Exception:
-        pass
-    return []
-
-
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -53,6 +29,19 @@ def get_sefaria_text(ref: str):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/siddur_index/<nusach>")
+def siddur_index(nusach):
+    schema = siddur_store.get_schema(nusach)
+    if schema:
+        return jsonify({"schema": schema, "local": True})
+    data = siddur_store.fetch_schema(nusach)
+    if not data:
+        return jsonify({"error": "Siddur catalog is not available."}), 503
+    if data.get("schema"):
+        siddur_store.save_schema(nusach, data["schema"])
+    return jsonify({**data, "local": False})
 
 
 @app.route("/get_prayer", methods=["POST"])
@@ -65,18 +54,13 @@ def get_prayer():
     # Reset scroll history for a fresh start on a new prayer
     speed_history.clear()
 
-    txt = get_sefaria_text(full_ref)
+    txt = siddur_store.get_text(full_ref)
 
-    # Basic link hunter / fallback
+    # Bootstrap fallback for references not yet present in the local import.
     if not txt:
-        try:
-            links = requests.get(
-                f"https://www.sefaria.org/api/links/{urllib.parse.quote(full_ref)}"
-            ).json()
-            if isinstance(links, list) and links:
-                txt = get_sefaria_text(links[0].get('ref'))
-        except Exception:
-            pass
+        txt = siddur_store.fetch_text(full_ref)
+        if txt:
+            siddur_store.save_text(full_ref, txt)
 
     return jsonify({"text": txt or "Liturgy not found.", "error": not txt})
 
@@ -101,11 +85,11 @@ def stream_sample():
 
     # --- Anxiety warnings (only meaningful once we have check-in data) ---
     slow_scroll = stats.warn_slow_scroll_speed(average_scroll_speed)
-    high_anxiety = stats.warn_high_anxiety(anxiety_dq)
-    high_change = stats.warn_high_change(anxiety_dq)
+    high_anxiety = stats.warn_high_anxiety(stats.anxiety_list)
+    high_change = stats.warn_high_change(stats.anxiety_list)
 
     # How long until the next check-in is suggested (minutes)
-    next_check_in = stats.calculate_next_anxiety_check(anxiety_dq, average_scroll_speed)
+    next_check_in = stats.calculate_next_anxiety_check(stats.anxiety_list, average_scroll_speed)
 
     return jsonify({
         "flatline_alert": flatline,
@@ -152,15 +136,15 @@ def submit_checkin():
     # Build response with warning flags
     response = {
         "status": "ok",
-        "high_anxiety_alert": stats.warn_high_anxiety(anxiety_dq),
-        "high_change_alert": stats.warn_high_change(anxiety_dq),
+        "high_anxiety_alert": stats.warn_high_anxiety(stats.anxiety_list),
+        "high_change_alert": stats.warn_high_change(stats.anxiety_list),
         "slow_scroll_alert": stats.warn_slow_scroll_speed(average_scroll_speed),
-        "next_checkin_minutes": stats.calculate_next_anxiety_check(anxiety_dq, average_scroll_speed),
+        "next_checkin_minutes": stats.calculate_next_anxiety_check(stats.anxiety_list, average_scroll_speed),
     }
 
     # Attach a chart once we have enough data points
     if len(stats.anxiety_list) >= 2:
-        response["chart_png_base64"] = stats.build_anxiety_plot(anxiety_dq, check_in_intervals)
+        response["chart_png_base64"] = stats.build_anxiety_plot(stats.anxiety_list, check_in_intervals)
 
     return jsonify(response)
 
@@ -171,7 +155,7 @@ def anxiety_chart():
     if len(stats.anxiety_list) < 2:
         return jsonify({"error": "Not enough data to plot yet."}), 400
 
-    png_b64 = stats.build_anxiety_plot(anxiety_dq, check_in_intervals)
+    png_b64 = stats.build_anxiety_plot(stats.anxiety_list, check_in_intervals)
     img_bytes = base64.b64decode(png_b64)
     from flask import Response
     return Response(img_bytes, mimetype='image/png')

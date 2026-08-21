@@ -1,3 +1,6 @@
 .gitignore
 .venv
 *cpython*
+__pycache__/
+.vscode/
+scripts/__pycache__/

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KoHack26-Flatbush Wireframe</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f0f0f0; display: flex; justify-content: center; padding: 20px; }
+        .device-frame { width: 375px; background: white; border: 4px solid #333; border-radius: 20px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); min-height: 667px; display: flex; flex-direction: column; }
+        .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+        .section { margin-bottom: 20px; border: 1px dashed #ccc; padding: 10px; position: relative; }
+        .section-tag { position: absolute; top: -10px; right: 5px; background: #eee; font-size: 10px; padding: 2px 5px; color: #555; }
+        .input-group { display: flex; gap: 5px; margin-bottom: 5px; }
+        input, button { padding: 8px; border: 1px solid #ddd; width: 100%; }
+        button { background: #333; color: white; cursor: pointer; font-weight: bold; }
+        .scroll-view { height: 150px; background: #f9f9f9; border: 1px solid #ddd; overflow-y: scroll; padding: 10px; font-size: 14px; color: #666; }
+        .alerts { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 11px; }
+        .alert-box { padding: 5px; background: #eee; text-align: center; border-radius: 4px; color: #aaa; }
+        .alert-box.active { background: #ffcccc; color: #900; border: 1px solid #900; }
+        .chart-placeholder { height: 100px; background: #eef; border: 1px solid #ccf; display: flex; align-items: center; justify-content: center; color: #669; font-size: 12px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="device-frame">
+        <div class="header">
+            <h3>Prayer & Anxiety Monitor</h3>
+        </div>
+
+        <!-- Prayer Selection -->
+        <div class="section">
+            <div class="section-tag">/get_prayer</div>
+            <div class="input-group">
+                <input type="text" placeholder="Book (e.g. Amida)">
+            </div>
+            <div class="input-group">
+                <input type="text" placeholder="Segments">
+                <button>Load</button>
+            </div>
+        </div>
+
+        <!-- Reading Area -->
+        <div class="section">
+            <div class="section-tag">/stream_sample (Scroll)</div>
+            <div class="scroll-view">
+                [Prayer Text Content]<br><br>
+                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore...
+                <br><br>
+                (Scroll activity detected here)
+            </div>
+        </div>
+
+        <!-- Status & Alerts -->
+        <div class="section">
+            <div class="section-tag">State & Alerts</div>
+            <div class="alerts">
+                <div class="alert-box">Flatline</div>
+                <div class="alert-box">Slow Scroll</div>
+                <div class="alert-box">High Anxiety</div>
+                <div class="alert-box">High Change</div>
+            </div>
+            <div style="margin-top:5px; font-size:12px; text-align:center;">
+                Avg Speed: 0.0 | Next Check-in: 5m
+            </div>
+        </div>
+
+        <!-- Check-in & Chart -->
+        <div class="section">
+            <div class="section-tag">/submit_checkin</div>
+            <label style="font-size:12px;">Anxiety Score (1-10)</label>
+            <div class="input-group">
+                <input type="number" min="1" max="10" value="5">
+                <button>Submit</button>
+            </div>
+            
+            <div class="chart-placeholder">
+                [Anxiety Chart Image from /anxiety_chart]
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
